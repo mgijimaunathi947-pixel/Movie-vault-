@@ -12,7 +12,11 @@ jobs:
         run: |
           mkdir -p MovieVaultV2/app/src/main/java/com/movievault/v2
           mkdir -p MovieVaultV2/app/src/main/res/values
-
+         
+          cat > MovieVaultV2/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          EOF
+          
           cat > MovieVaultV2/settings.gradle.kts <<'EOF'
           pluginManagement {
               repositories {
