@@ -15,6 +15,7 @@ jobs:
          
           cat > MovieVaultV2/gradle.properties <<'EOF'
           android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
           EOF
           
           cat > MovieVaultV2/settings.gradle.kts <<'EOF'
