@@ -1,0 +1,26 @@
+name: Build MovieVault APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Extract MovieVault project
+        run: unzip -q MovieVault-Android-Project.zip
+
+      - name: Build APK
+        run: |
+          cd MovieVault
+          gradle assembleDebug --no-daemon
+
+      - name: Save APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MovieVault-APK
+          path: MovieVault/app/build/outputs/apk/debug/*.apk
