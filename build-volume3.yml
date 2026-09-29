@@ -1,0 +1,373 @@
+name: Build MovieVault Volume 3
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Create Android project
+        run: |
+          mkdir -p MovieVaultV3/app/src/main/java/com/movievault/v3
+          mkdir -p MovieVaultV3/app/src/main/res/values
+
+          cd MovieVaultV3
+
+          cat > gradle.properties <<'EOF'
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
+          EOF
+
+          cat > settings.gradle.kts <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "MovieVaultV3"
+          include(":app")
+          EOF
+
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+          }
+          EOF
+
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+
+          android {
+              namespace = "com.movievault.v3"
+              compileSdk = 35
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              defaultConfig {
+                  applicationId = "com.movievault.v3"
+                  minSdk = 24
+                  targetSdk = 35
+                  versionCode = 3
+                  versionName = "3.0"
+              }
+          }
+
+          kotlin {
+              jvmToolchain(17)
+          }
+
+          dependencies {
+              implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+              implementation("androidx.activity:activity-compose:1.10.0")
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+              debugImplementation("androidx.compose.ui:ui-tooling")
+          }
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+              <style name="Theme.MovieVault" parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:statusBarColor">#111111</item>
+                  <item name="android:navigationBarColor">#111111</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:theme="@style/Theme.MovieVault"
+                  android:label="Movie Vault"
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/movievault/v3/MainActivity.kt <<'EOF'
+          package com.movievault.v3
+
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.PaddingValues
+          import androidx.compose.foundation.layout.Row
+          import androidx.compose.foundation.layout.Spacer
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.fillMaxWidth
+          import androidx.compose.foundation.layout.height
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.layout.size
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Search
+          import androidx.compose.material3.Card
+          import androidx.compose.material3.CardDefaults
+          import androidx.compose.material3.Icon
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.OutlinedTextField
+          import androidx.compose.material3.Scaffold
+          import androidx.compose.material3.Surface
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+
+          data class Movie(
+              val title: String,
+              val category: String,
+              val description: String
+          )
+
+          private val movies = listOf(
+              Movie(
+                  "Big Buck Bunny",
+                  "Animation",
+                  "A short animated film available through an openly licensed distribution."
+              ),
+              Movie(
+                  "Sintel",
+                  "Fantasy",
+                  "An open movie project presented as a legal demonstration title."
+              ),
+              Movie(
+                  "Tears of Steel",
+                  "Sci-Fi",
+                  "A science-fiction open movie created as part of the Blender Open Movie project."
+              ),
+              Movie(
+                  "Elephants Dream",
+                  "Animation",
+                  "An open movie project demonstrating computer animation and visual effects."
+              )
+          )
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+
+                  setContent {
+                      MovieVaultApp()
+                  }
+              }
+          }
+
+          @Composable
+          fun MovieVaultApp() {
+              var query by remember { mutableStateOf("") }
+
+              val filteredMovies = movies.filter {
+                  it.title.contains(query, ignoreCase = true) ||
+                  it.category.contains(query, ignoreCase = true)
+              }
+
+              MaterialTheme {
+                  Surface(
+                      modifier = Modifier.fillMaxSize(),
+                      color = Color(0xFF0D0D0D)
+                  ) {
+                      Scaffold(
+                          containerColor = Color(0xFF0D0D0D)
+                      ) { padding ->
+
+                          LazyColumn(
+                              modifier = Modifier
+                                  .fillMaxSize()
+                                  .padding(padding)
+                                  .padding(horizontal = 18.dp),
+                              contentPadding = PaddingValues(vertical = 24.dp),
+                              verticalArrangement = Arrangement.spacedBy(14.dp)
+                          ) {
+
+                              item {
+                                  Text(
+                                      text = "MOVIE VAULT",
+                                      color = Color(0xFFD4AF37),
+                                      fontSize = 28.sp,
+                                      fontWeight = FontWeight.Bold
+                                  )
+
+                                  Spacer(modifier = Modifier.height(4.dp))
+
+                                  Text(
+                                      text = "Legal movies you can discover and watch.",
+                                      color = Color.LightGray,
+                                      fontSize = 14.sp
+                                  )
+
+                                  Spacer(modifier = Modifier.height(18.dp))
+
+                                  OutlinedTextField(
+                                      value = query,
+                                      onValueChange = { query = it },
+                                      modifier = Modifier.fillMaxWidth(),
+                                      placeholder = {
+                                          Text("Search movies")
+                                      },
+                                      leadingIcon = {
+                                          Icon(
+                                              Icons.Default.Search,
+                                              contentDescription = "Search"
+                                          )
+                                      },
+                                      singleLine = true
+                                  )
+
+                                  Spacer(modifier = Modifier.height(12.dp))
+
+                                  Text(
+                                      text = "Featured",
+                                      color = Color.White,
+                                      fontSize = 22.sp,
+                                      fontWeight = FontWeight.Bold
+                                  )
+                              }
+
+                              items(filteredMovies) { movie ->
+                                  MovieCard(movie)
+                              }
+
+                              item {
+                                  Spacer(modifier = Modifier.height(20.dp))
+
+                                  Text(
+                                      text = "Volume 3 foundation",
+                                      color = Color(0xFFD4AF37),
+                                      fontWeight = FontWeight.Bold
+                                  )
+
+                                  Text(
+                                      text = "Real movie metadata, legal playback and permitted downloads will be connected in later stages.",
+                                      color = Color.Gray,
+                                      fontSize = 13.sp,
+                                      modifier = Modifier.padding(top = 6.dp)
+                                  )
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun MovieCard(movie: Movie) {
+              Card(
+                  modifier = Modifier.fillMaxWidth(),
+                  colors = CardDefaults.cardColors(
+                      containerColor = Color(0xFF1A1A1A)
+                  )
+              ) {
+                  Row(
+                      modifier = Modifier
+                          .fillMaxWidth()
+                          .padding(16.dp),
+                      verticalAlignment = Alignment.CenterVertically
+                  ) {
+
+                      Box(
+                          modifier = Modifier
+                              .size(72.dp)
+                              .background(Color(0xFF252525)),
+                          contentAlignment = Alignment.Center
+                      ) {
+                          Text(
+                              text = "MV",
+                              color = Color(0xFFD4AF37),
+                              fontWeight = FontWeight.Bold
+                          )
+                      }
+
+                      Column(
+                          modifier = Modifier
+                              .padding(start = 14.dp)
+                              .weight(1f)
+                      ) {
+                          Text(
+                              text = movie.title,
+                              color = Color.White,
+                              fontWeight = FontWeight.Bold,
+                              fontSize = 17.sp
+                          )
+
+                          Text(
+                              text = movie.category,
+                              color = Color(0xFFD4AF37),
+                              fontSize = 12.sp,
+                              modifier = Modifier.padding(top = 3.dp)
+                          )
+
+                          Text(
+                              text = movie.description,
+                              color = Color.Gray,
+                              fontSize = 12.sp,
+                              modifier = Modifier.padding(top = 5.dp)
+                          )
+                      }
+                  }
+              }
+          }
+          EOF
+
+          gradle assembleDebug --no-daemon
+
+      - name: Upload Volume 3 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MovieVault-Volume-3-APK
+          path: MovieVaultV3/app/build/outputs/apk/debug/app-debug.apk
