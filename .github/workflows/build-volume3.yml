@@ -13,11 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Install ImageMagick
         shell: bash
@@ -26,13 +26,20 @@ jobs:
           sudo apt-get install -y imagemagick
           convert -version
 
-      - name: Create Android project
+      - name: Create Movie Vault Android project
         shell: bash
         run: |
+          set -e
+
           rm -rf MovieVaultV10
+
           mkdir -p MovieVaultV10/app/src/main/java/com/movievault/v10
           mkdir -p MovieVaultV10/app/src/main/res/drawable
           mkdir -p MovieVaultV10/app/src/main/res/values
+
+          # ---------------------------------------------------------
+          # SETTINGS
+          # ---------------------------------------------------------
 
           cat > MovieVaultV10/settings.gradle.kts <<'EOF'
           pluginManagement {
@@ -44,7 +51,10 @@ jobs:
           }
 
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositoriesMode.set(
+                  org.gradle.api.initialization.resolve.RepositoriesMode.FAIL_ON_PROJECT_REPOS
+              )
+
               repositories {
                   google()
                   mavenCentral()
@@ -55,6 +65,10 @@ jobs:
           include(":app")
           EOF
 
+          # ---------------------------------------------------------
+          # ROOT BUILD
+          # ---------------------------------------------------------
+
           cat > MovieVaultV10/build.gradle.kts <<'EOF'
           plugins {
               id("com.android.application") version "8.7.3" apply false
@@ -63,11 +77,19 @@ jobs:
           }
           EOF
 
+          # ---------------------------------------------------------
+          # GRADLE PROPERTIES
+          # ---------------------------------------------------------
+
           cat > MovieVaultV10/gradle.properties <<'EOF'
           android.useAndroidX=true
           org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m
           kotlin.code.style=official
           EOF
+
+          # ---------------------------------------------------------
+          # APP BUILD
+          # ---------------------------------------------------------
 
           cat > MovieVaultV10/app/build.gradle.kts <<'EOF'
           plugins {
@@ -104,17 +126,27 @@ jobs:
 
           dependencies {
               implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+
               implementation("androidx.activity:activity-compose:1.10.0")
+
               implementation("androidx.compose.ui:ui")
               implementation("androidx.compose.ui:ui-tooling-preview")
+
               implementation("androidx.compose.material3:material3")
               implementation("androidx.compose.material:material-icons-extended")
+
               implementation("androidx.navigation:navigation-compose:2.8.5")
+
               implementation("androidx.media3:media3-exoplayer:1.5.1")
               implementation("androidx.media3:media3-ui:1.5.1")
+
               implementation("io.coil-kt:coil-compose:2.7.0")
           }
           EOF
+
+          # ---------------------------------------------------------
+          # APP THEME
+          # ---------------------------------------------------------
 
           cat > MovieVaultV10/app/src/main/res/values/styles.xml <<'EOF'
           <resources>
@@ -127,30 +159,40 @@ jobs:
           </resources>
           EOF
 
-          # Find the Movie Vault logo.
-          # If one exists, convert it to a proper PNG.
-          # If none exists, generate a fallback MV logo.
-          LOGO=$(find . -type f \( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" \) \
-            | grep -Ei 'movie|vault|logo' | head -n 1 || true)
+          # ---------------------------------------------------------
+          # LOGO
+          # ---------------------------------------------------------
+
+          LOGO=$(find . -type f \
+            \( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.webp" \) \
+            | grep -Ei 'movie|vault|logo' \
+            | head -n 1 || true)
 
           if [ -n "$LOGO" ]; then
-            echo "Found logo: $LOGO"
-            convert "$LOGO" \
-              -background none \
-              -strip \
-              MovieVaultV10/app/src/main/res/drawable/movie_vault_logo.png
+              echo "Found Movie Vault logo: $LOGO"
+
+              convert "$LOGO" \
+                -background none \
+                -strip \
+                MovieVaultV10/app/src/main/res/drawable/movie_vault_logo.png
           else
-            echo "No Movie Vault logo found. Creating fallback logo."
-            convert -size 512x512 xc:'#111111' \
-              -fill '#D4AF37' \
-              -gravity center \
-              -pointsize 100 \
-              -annotate 0 'MV' \
-              MovieVaultV10/app/src/main/res/drawable/movie_vault_logo.png
+              echo "No Movie Vault logo found. Creating fallback logo."
+
+              convert \
+                -size 512x512 \
+                xc:'#111111' \
+                -fill '#D4AF37' \
+                -gravity center \
+                -pointsize 100 \
+                -annotate 0 'MV' \
+                MovieVaultV10/app/src/main/res/drawable/movie_vault_logo.png
           fi
 
-          # Verify the logo was actually created.
           test -f MovieVaultV10/app/src/main/res/drawable/movie_vault_logo.png
+
+          # ---------------------------------------------------------
+          # ANDROID MANIFEST
+          # ---------------------------------------------------------
 
           cat > MovieVaultV10/app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -181,28 +223,72 @@ jobs:
           </manifest>
           EOF
 
+          # ---------------------------------------------------------
+          # MAIN ACTIVITY
+          # ---------------------------------------------------------
+
           cat > MovieVaultV10/app/src/main/java/com/movievault/v10/MainActivity.kt <<'EOF'
           package com.movievault.v10
 
           import android.app.DownloadManager
           import android.content.Context
+          import android.content.Intent
           import android.net.Uri
           import android.os.Bundle
+
           import androidx.activity.ComponentActivity
           import androidx.activity.compose.setContent
+
           import androidx.compose.foundation.background
           import androidx.compose.foundation.clickable
           import androidx.compose.foundation.horizontalScroll
-          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.Column
+          import androidx.compose.foundation.layout.PaddingValues
+          import androidx.compose.foundation.layout.Row
+          import androidx.compose.foundation.layout.Spacer
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.fillMaxWidth
+          import androidx.compose.foundation.layout.height
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.layout.size
+          import androidx.compose.foundation.layout.width
           import androidx.compose.foundation.lazy.LazyColumn
           import androidx.compose.foundation.lazy.items
           import androidx.compose.foundation.rememberScrollState
           import androidx.compose.foundation.shape.RoundedCornerShape
           import androidx.compose.foundation.text.BasicTextField
+
           import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.*
-          import androidx.compose.material3.*
-          import androidx.compose.runtime.*
+          import androidx.compose.material.icons.filled.ArrowBack
+          import androidx.compose.material.icons.filled.CloudDownload
+          import androidx.compose.material.icons.filled.Download
+          import androidx.compose.material.icons.filled.Favorite
+          import androidx.compose.material.icons.filled.FavoriteBorder
+          import androidx.compose.material.icons.filled.Home
+          import androidx.compose.material.icons.filled.PlayArrow
+          import androidx.compose.material.icons.filled.Search
+          import androidx.compose.material.icons.filled.Settings
+
+          import androidx.compose.material3.Button
+          import androidx.compose.material3.ButtonDefaults
+          import androidx.compose.material3.Icon
+          import androidx.compose.material3.IconButton
+          import androidx.compose.material3.NavigationBar
+          import androidx.compose.material3.NavigationBarItem
+          import androidx.compose.material3.OutlinedButton
+          import androidx.compose.material3.Scaffold
+          import androidx.compose.material3.Surface
+          import androidx.compose.material3.Text
+
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.DisposableEffect
+          import androidx.compose.runtime.getValue
+          import androidx.compose.runtime.mutableStateOf
+          import androidx.compose.runtime.remember
+          import androidx.compose.runtime.setValue
+
           import androidx.compose.ui.Alignment
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.draw.clip
@@ -214,10 +300,12 @@ jobs:
           import androidx.compose.ui.text.font.FontWeight
           import androidx.compose.ui.unit.dp
           import androidx.compose.ui.unit.sp
+          import androidx.compose.ui.viewinterop.AndroidView
+
           import androidx.media3.common.MediaItem
           import androidx.media3.exoplayer.ExoPlayer
           import androidx.media3.ui.PlayerView
-          import androidx.compose.ui.viewinterop.AndroidView
+
           import coil.compose.AsyncImage
 
           private val Gold = Color(0xFFD4AF37)
@@ -237,142 +325,194 @@ jobs:
           )
 
           private val movieList = listOf(
+
               Movie(
-                  "Big Buck Bunny",
-                  "2008",
-                  "Animation",
-                  "10 min",
-                  "A cheerful open movie from the Blender Foundation.",
-                  "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
-                  "https://archive.org/details/BigBuckBunny_124",
-                  "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4"
+                  title = "Big Buck Bunny",
+                  year = "2008",
+                  genre = "Animation",
+                  duration = "10 min",
+                  description = "A cheerful open movie from the Blender Foundation.",
+                  poster = "https://peach.blender.org/wp-content/uploads/title_anouncement.jpg",
+                  source = "https://archive.org/details/BigBuckBunny_124",
+                  video = "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4"
               ),
+
               Movie(
-                  "Sintel",
-                  "2010",
-                  "Fantasy",
-                  "15 min",
-                  "An open movie created by the Blender Foundation.",
-                  "https://durian.blender.org/wp-content/uploads/2010/08/sintel-poster.jpg",
-                  "https://archive.org/details/Sintel",
-                  null
+                  title = "Sintel",
+                  year = "2010",
+                  genre = "Fantasy",
+                  duration = "15 min",
+                  description = "An open movie created by the Blender Foundation.",
+                  poster = "https://durian.blender.org/wp-content/uploads/2010/08/sintel-poster.jpg",
+                  source = "https://archive.org/details/Sintel",
+                  video = null
               ),
+
               Movie(
-                  "Tears of Steel",
-                  "2012",
-                  "Sci-Fi",
-                  "12 min",
-                  "A Blender Foundation open movie.",
-                  "https://mango.blender.org/wp-content/uploads/2012/05/tears-of-steel-poster.jpg",
-                  "https://archive.org/details/Tears-of-Steel",
-                  null
+                  title = "Tears of Steel",
+                  year = "2012",
+                  genre = "Sci-Fi",
+                  duration = "12 min",
+                  description = "A Blender Foundation open movie.",
+                  poster = "https://mango.blender.org/wp-content/uploads/2012/05/tears-of-steel-poster.jpg",
+                  source = "https://archive.org/details/Tears-of-Steel",
+                  video = null
               ),
+
               Movie(
-                  "Elephants Dream",
-                  "2006",
-                  "Animation",
-                  "11 min",
-                  "The first open movie from the Blender Foundation.",
-                  "https://orange.blender.org/wp-content/uploads/2006/05/ed-poster.jpg",
-                  "https://archive.org/details/ElephantsDream",
-                  null
+                  title = "Elephants Dream",
+                  year = "2006",
+                  genre = "Animation",
+                  duration = "11 min",
+                  description = "The first open movie from the Blender Foundation.",
+                  poster = "https://orange.blender.org/wp-content/uploads/2006/05/ed-poster.jpg",
+                  source = "https://archive.org/details/ElephantsDream",
+                  video = null
               )
           )
 
           class MainActivity : ComponentActivity() {
+
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
-                  setContent { MovieVault() }
+
+                  setContent {
+                      MovieVault()
+                  }
               }
           }
 
           @Composable
           fun MovieVault() {
-              var page by remember { mutableStateOf("home") }
-              var selected by remember { mutableStateOf<Movie?>(null) }
-              var saved by remember { mutableStateOf(setOf<String>()) }
-              var search by remember { mutableStateOf("") }
+
+              var page by remember {
+                  mutableStateOf("home")
+              }
+
+              var selected by remember {
+                  mutableStateOf<Movie?>(null)
+              }
+
+              var saved by remember {
+                  mutableStateOf(setOf<String>())
+              }
+
+              var search by remember {
+                  mutableStateOf("")
+              }
 
               when {
-                  page == "player" && selected != null ->
-                      Player(selected!!, { page = "details" })
 
-                  page == "details" && selected != null ->
+                  page == "player" && selected != null -> {
+                      Player(
+                          movie = selected!!,
+                          onBack = {
+                              page = "details"
+                          }
+                      )
+                  }
+
+                  page == "details" && selected != null -> {
                       Details(
                           movie = selected!!,
                           isSaved = saved.contains(selected!!.title),
+
                           onBack = {
                               selected = null
                               page = "home"
                           },
+
                           onPlay = {
                               page = "player"
                           },
+
                           onSave = {
                               saved =
-                                  if (saved.contains(selected!!.title))
+                                  if (saved.contains(selected!!.title)) {
                                       saved - selected!!.title
-                                  else
+                                  } else {
                                       saved + selected!!.title
+                                  }
                           }
                       )
+                  }
 
-                  page == "search" ->
-                      Search(
+                  page == "search" -> {
+                      SearchScreen(
                           search = search,
-                          onSearch = { search = it },
+
+                          onSearch = {
+                              search = it
+                          },
+
                           onMovie = {
                               selected = it
                               page = "details"
                           },
+
                           onBack = {
                               page = "home"
                           }
                       )
+                  }
 
-                  page == "list" ->
+                  page == "list" -> {
                       MyList(
                           movies = movieList.filter {
                               saved.contains(it.title)
                           },
+
                           onMovie = {
                               selected = it
                               page = "details"
                           },
+
                           onBack = {
                               page = "home"
                           }
                       )
+                  }
 
-                  page == "downloads" ->
-                      Downloads {
-                          page = "home"
-                      }
+                  page == "downloads" -> {
+                      Downloads(
+                          onBack = {
+                              page = "home"
+                          }
+                      )
+                  }
 
-                  page == "more" ->
-                      More {
-                          page = "home"
-                      }
+                  page == "more" -> {
+                      More(
+                          onBack = {
+                              page = "home"
+                          }
+                      )
+                  }
 
-                  else ->
+                  else -> {
                       Home(
                           onMovie = {
                               selected = it
                               page = "details"
                           },
+
                           onSearch = {
                               page = "search"
                           },
+
                           onList = {
                               page = "list"
                           },
+
                           onDownloads = {
                               page = "downloads"
                           },
+
                           onMore = {
                               page = "more"
                           }
                       )
+                  }
               }
           }
 
@@ -384,102 +524,112 @@ jobs:
               onDownloads: () -> Unit,
               onMore: () -> Unit
           ) {
+
               Scaffold(
                   containerColor = Background,
+
                   bottomBar = {
+
                       NavigationBar(
                           containerColor = Color(0xFF101010)
                       ) {
+
                           NavigationBarItem(
-                              true,
-                              {},
-                              {
+                              selected = true,
+                              onClick = {},
+                              icon = {
                                   Icon(
-                                      Icons.Default.Home,
-                                      null
+                                      imageVector = Icons.Default.Home,
+                                      contentDescription = "Home"
                                   )
                               },
                               label = {
-                                  Text("Home")
+                                  Text(text = "Home")
                               }
                           )
 
                           NavigationBarItem(
-                              false,
-                              onSearch,
-                              {
+                              selected = false,
+                              onClick = onSearch,
+                              icon = {
                                   Icon(
-                                      Icons.Default.Search,
-                                      null
+                                      imageVector = Icons.Default.Search,
+                                      contentDescription = "Search"
                                   )
                               },
                               label = {
-                                  Text("Search")
+                                  Text(text = "Search")
                               }
                           )
 
                           NavigationBarItem(
-                              false,
-                              onList,
-                              {
+                              selected = false,
+                              onClick = onList,
+                              icon = {
                                   Icon(
-                                      Icons.Default.FavoriteBorder,
-                                      null
+                                      imageVector = Icons.Default.FavoriteBorder,
+                                      contentDescription = "My List"
                                   )
                               },
                               label = {
-                                  Text("My List")
+                                  Text(text = "My List")
                               }
                           )
 
                           NavigationBarItem(
-                              false,
-                              onDownloads,
-                              {
+                              selected = false,
+                              onClick = onDownloads,
+                              icon = {
                                   Icon(
-                                      Icons.Default.Download,
-                                      null
+                                      imageVector = Icons.Default.Download,
+                                      contentDescription = "Downloads"
                                   )
                               },
                               label = {
-                                  Text("Downloads")
+                                  Text(text = "Downloads")
                               }
                           )
                       }
                   }
               ) { padding ->
+
                   LazyColumn(
                       modifier = Modifier
                           .fillMaxSize()
                           .padding(padding),
+
                       contentPadding = PaddingValues(
                           bottom = 30.dp
                       )
                   ) {
+
                       item {
+
                           Row(
-                              Modifier
+                              modifier = Modifier
                                   .fillMaxWidth()
                                   .padding(18.dp),
+
                               verticalAlignment = Alignment.CenterVertically
                           ) {
+
                               Text(
-                                  "MOVIE VAULT",
+                                  text = "MOVIE VAULT",
                                   color = Gold,
                                   fontSize = 21.sp,
                                   fontWeight = FontWeight.Bold
                               )
 
                               Spacer(
-                                  Modifier.weight(1f)
+                                  modifier = Modifier.weight(1f)
                               )
 
                               IconButton(
                                   onClick = onMore
                               ) {
                                   Icon(
-                                      Icons.Default.Settings,
-                                      null,
+                                      imageVector = Icons.Default.Settings,
+                                      contentDescription = "More",
                                       tint = Color.White
                                   )
                               }
@@ -487,31 +637,40 @@ jobs:
                       }
 
                       item {
+
                           Hero(
-                              movieList[0],
-                              onMovie
+                              movie = movieList[0],
+                              onClick = {
+                                  onMovie(movieList[0])
+                              }
                           )
                       }
 
                       item {
-                          Title("Popular Open Movies")
+                          SectionTitle(
+                              text = "Popular Open Movies"
+                          )
                       }
 
                       item {
+
                           Row(
-                              Modifier
+                              modifier = Modifier
                                   .horizontalScroll(
                                       rememberScrollState()
                                   )
                                   .padding(horizontal = 16.dp),
+
                               horizontalArrangement =
                                   Arrangement.spacedBy(12.dp)
                           ) {
-                              movieList.forEach {
+
+                              movieList.forEach { movie ->
+
                                   MovieCard(
-                                      it,
-                                      {
-                                          onMovie(it)
+                                      movie = movie,
+                                      onClick = {
+                                          onMovie(movie)
                                       }
                                   )
                               }
@@ -519,33 +678,40 @@ jobs:
                       }
 
                       item {
-                          Title("Browse Categories")
+                          SectionTitle(
+                              text = "Browse Categories"
+                          )
                       }
 
                       item {
+
                           Row(
-                              Modifier
+                              modifier = Modifier
                                   .horizontalScroll(
                                       rememberScrollState()
                                   )
                                   .padding(horizontal = 16.dp),
+
                               horizontalArrangement =
                                   Arrangement.spacedBy(10.dp)
                           ) {
+
                               listOf(
                                   "Animation",
                                   "Fantasy",
                                   "Sci-Fi",
                                   "Open Movies"
-                              ).forEach {
+                              ).forEach { category ->
+
                                   Surface(
                                       color = Color(0xFF202020),
-                                      shape = RoundedCornerShape(50)
+                                      shape = RoundedCornerShape(50.dp)
                                   ) {
+
                                       Text(
-                                          it,
+                                          text = category,
                                           color = Gold,
-                                          Modifier.padding(
+                                          modifier = Modifier.padding(
                                               horizontal = 17.dp,
                                               vertical = 10.dp
                                           )
@@ -563,8 +729,9 @@ jobs:
               movie: Movie,
               onClick: () -> Unit
           ) {
+
               Box(
-                  Modifier
+                  modifier = Modifier
                       .fillMaxWidth()
                       .padding(16.dp)
                       .height(320.dp)
@@ -575,19 +742,20 @@ jobs:
                           onClick()
                       }
               ) {
+
                   AsyncImage(
-                      movie.poster,
-                      movie.title,
-                      Modifier.fillMaxSize(),
+                      model = movie.poster,
+                      contentDescription = movie.title,
+                      modifier = Modifier.fillMaxSize(),
                       contentScale = ContentScale.Crop
                   )
 
                   Box(
-                      Modifier
+                      modifier = Modifier
                           .fillMaxSize()
                           .background(
                               Brush.verticalGradient(
-                                  listOf(
+                                  colors = listOf(
                                       Color.Transparent,
                                       Color(0xEE090909)
                                   )
@@ -596,52 +764,53 @@ jobs:
                   )
 
                   Column(
-                      Modifier
+                      modifier = Modifier
                           .align(Alignment.BottomStart)
                           .padding(22.dp)
                   ) {
+
                       Text(
-                          "FEATURED",
+                          text = "FEATURED",
                           color = Gold,
                           fontSize = 12.sp,
                           fontWeight = FontWeight.Bold
                       )
 
                       Text(
-                          movie.title,
+                          text = movie.title,
                           color = Color.White,
                           fontSize = 30.sp,
                           fontWeight = FontWeight.Bold
                       )
 
                       Text(
-                          "${movie.year} • ${movie.genre} • ${movie.duration}",
+                          text = "${movie.year} • ${movie.genre} • ${movie.duration}",
                           color = Color.LightGray
                       )
 
                       Spacer(
-                          Modifier.height(10.dp)
+                          modifier = Modifier.height(10.dp)
                       )
 
                       Button(
                           onClick = onClick,
-                          colors =
-                              ButtonDefaults.buttonColors(
-                                  containerColor = Gold
-                              )
+                          colors = ButtonDefaults.buttonColors(
+                              containerColor = Gold
+                          )
                       ) {
+
                           Icon(
-                              Icons.Default.PlayArrow,
-                              null,
+                              imageVector = Icons.Default.PlayArrow,
+                              contentDescription = "View",
                               tint = Color.Black
                           )
 
                           Spacer(
-                              Modifier.width(6.dp)
+                              modifier = Modifier.width(6.dp)
                           )
 
                           Text(
-                              "View Movie",
+                              text = "View Movie",
                               color = Color.Black
                           )
                       }
@@ -650,19 +819,20 @@ jobs:
           }
 
           @Composable
-          fun Title(
+          fun SectionTitle(
               text: String
           ) {
+
               Text(
-                  text,
+                  text = text,
                   color = Color.White,
                   fontSize = 20.sp,
                   fontWeight = FontWeight.Bold,
                   modifier = Modifier.padding(
-                      16.dp,
-                      22.dp,
-                      16.dp,
-                      12.dp
+                      start = 16.dp,
+                      top = 22.dp,
+                      end = 16.dp,
+                      bottom = 12.dp
                   )
               )
           }
@@ -672,38 +842,42 @@ jobs:
               movie: Movie,
               onClick: () -> Unit
           ) {
+
               Column(
-                  Modifier
+                  modifier = Modifier
                       .width(150.dp)
                       .clickable {
                           onClick()
                       }
               ) {
+
                   AsyncImage(
-                      movie.poster,
-                      movie.title,
-                      Modifier
+                      model = movie.poster,
+                      contentDescription = movie.title,
+
+                      modifier = Modifier
                           .fillMaxWidth()
                           .height(215.dp)
                           .clip(
                               RoundedCornerShape(16.dp)
                           ),
+
                       contentScale = ContentScale.Crop
                   )
 
                   Spacer(
-                      Modifier.height(7.dp)
+                      modifier = Modifier.height(7.dp)
                   )
 
                   Text(
-                      movie.title,
+                      text = movie.title,
                       color = Color.White,
                       fontWeight = FontWeight.Bold,
                       maxLines = 1
                   )
 
                   Text(
-                      "${movie.year} • ${movie.genre}",
+                      text = "${movie.year} • ${movie.genre}",
                       color = Muted,
                       fontSize = 12.sp
                   )
@@ -718,33 +892,37 @@ jobs:
               onPlay: () -> Unit,
               onSave: () -> Unit
           ) {
+
               val context = LocalContext.current
 
               LazyColumn(
-                  Modifier.fillMaxSize(),
+                  modifier = Modifier.fillMaxSize(),
                   contentPadding = PaddingValues(
                       bottom = 30.dp
                   )
               ) {
+
                   item {
+
                       Box(
-                          Modifier
+                          modifier = Modifier
                               .fillMaxWidth()
                               .height(400.dp)
                       ) {
+
                           AsyncImage(
-                              movie.poster,
-                              movie.title,
-                              Modifier.fillMaxSize(),
+                              model = movie.poster,
+                              contentDescription = movie.title,
+                              modifier = Modifier.fillMaxSize(),
                               contentScale = ContentScale.Crop
                           )
 
                           Box(
-                              Modifier
+                              modifier = Modifier
                                   .fillMaxSize()
                                   .background(
                                       Brush.verticalGradient(
-                                          listOf(
+                                          colors = listOf(
                                               Color.Transparent,
                                               Color(0xF5090909)
                                           )
@@ -754,35 +932,37 @@ jobs:
 
                           IconButton(
                               onClick = onBack,
-                              Modifier.padding(8.dp)
+                              modifier = Modifier.padding(8.dp)
                           ) {
+
                               Icon(
-                                  Icons.Default.ArrowBack,
-                                  null,
+                                  imageVector = Icons.Default.ArrowBack,
+                                  contentDescription = "Back",
                                   tint = Color.White
                               )
                           }
 
                           Column(
-                              Modifier
+                              modifier = Modifier
                                   .align(Alignment.BottomStart)
                                   .padding(22.dp)
                           ) {
+
                               Text(
-                                  movie.genre.uppercase(),
+                                  text = movie.genre.uppercase(),
                                   color = Gold,
                                   fontWeight = FontWeight.Bold
                               )
 
                               Text(
-                                  movie.title,
+                                  text = movie.title,
                                   color = Color.White,
                                   fontSize = 34.sp,
                                   fontWeight = FontWeight.Bold
                               )
 
                               Text(
-                                  "${movie.year} • ${movie.duration}",
+                                  text = "${movie.year} • ${movie.duration}",
                                   color = Color.LightGray
                               )
                           }
@@ -790,8 +970,9 @@ jobs:
                   }
 
                   item {
+
                       Text(
-                          movie.description,
+                          text = movie.description,
                           color = Color.LightGray,
                           fontSize = 15.sp,
                           modifier = Modifier.padding(20.dp)
@@ -799,78 +980,98 @@ jobs:
                   }
 
                   item {
+
                       Row(
-                          Modifier
+                          modifier = Modifier
                               .fillMaxWidth()
                               .padding(horizontal = 20.dp),
+
                           horizontalArrangement =
                               Arrangement.spacedBy(10.dp)
                       ) {
+
                           if (movie.video != null) {
+
                               Button(
                                   onClick = onPlay,
-                                  colors =
-                                      ButtonDefaults.buttonColors(
-                                          containerColor = Gold
-                                      ),
-                                  modifier =
-                                      Modifier.weight(1f)
+
+                                  colors = ButtonDefaults.buttonColors(
+                                      containerColor = Gold
+                                  ),
+
+                                  modifier = Modifier.weight(1f)
                               ) {
+
                                   Icon(
-                                      Icons.Default.PlayArrow,
-                                      null,
+                                      imageVector = Icons.Default.PlayArrow,
+                                      contentDescription = "Watch",
                                       tint = Color.Black
                                   )
 
                                   Spacer(
-                                      Modifier.width(5.dp)
+                                      modifier = Modifier.width(5.dp)
                                   )
 
                                   Text(
-                                      "Watch",
+                                      text = "Watch",
                                       color = Color.Black
                                   )
                               }
+
                           } else {
+
                               OutlinedButton(
                                   onClick = {
+
                                       context.startActivity(
-                                          android.content.Intent(
-                                              android.content.Intent.ACTION_VIEW,
+                                          Intent(
+                                              Intent.ACTION_VIEW,
                                               Uri.parse(movie.source)
                                           )
                                       )
                                   },
-                                  modifier =
-                                      Modifier.weight(1f)
+
+                                  modifier = Modifier.weight(1f)
                               ) {
-                                  Text("Open Source")
+
+                                  Text(
+                                      text = "Open Source"
+                                  )
                               }
                           }
 
                           IconButton(
                               onClick = onSave
                           ) {
+
                               Icon(
-                                  if (isSaved)
-                                      Icons.Default.Favorite
-                                  else
-                                      Icons.Default.FavoriteBorder,
-                                  null,
+                                  imageVector =
+                                      if (isSaved) {
+                                          Icons.Default.Favorite
+                                      } else {
+                                          Icons.Default.FavoriteBorder
+                                      },
+
+                                  contentDescription = "Save",
+
                                   tint =
-                                      if (isSaved)
+                                      if (isSaved) {
                                           Gold
-                                      else
+                                      } else {
                                           Color.White
+                                      }
                               )
                           }
                       }
                   }
 
                   if (movie.video != null) {
+
                       item {
+
                           Button(
                               onClick = {
+
                                   val request =
                                       DownloadManager.Request(
                                           Uri.parse(movie.video)
@@ -886,6 +1087,7 @@ jobs:
                                           .setDestinationInExternalPublicDir(
                                               android.os.Environment
                                                   .DIRECTORY_DOWNLOADS,
+
                                               "MovieVault-${movie.title.replace(" ", "_")}.mp4"
                                           )
 
@@ -896,49 +1098,50 @@ jobs:
 
                                   manager.enqueue(request)
                               },
-                              colors =
-                                  ButtonDefaults.buttonColors(
-                                      containerColor =
-                                          Color(0xFF252525)
-                                  ),
-                              modifier =
-                                  Modifier
-                                      .fillMaxWidth()
-                                      .padding(20.dp)
+
+                              colors = ButtonDefaults.buttonColors(
+                                  containerColor = Color(0xFF252525)
+                              ),
+
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .padding(20.dp)
                           ) {
+
                               Icon(
-                                  Icons.Default.CloudDownload,
-                                  null,
+                                  imageVector = Icons.Default.CloudDownload,
+                                  contentDescription = "Download",
                                   tint = Gold
                               )
 
                               Spacer(
-                                  Modifier.width(8.dp)
+                                  modifier = Modifier.width(8.dp)
                               )
 
                               Text(
-                                  "Download for Offline Watching"
+                                  text = "Download for Offline Watching"
                               )
                           }
                       }
                   }
 
                   item {
+
                       Text(
-                          "LEGAL SOURCE",
+                          text = "LEGAL SOURCE",
                           color = Gold,
                           fontWeight = FontWeight.Bold,
                           fontSize = 11.sp,
                           modifier = Modifier.padding(
-                              20.dp,
-                              10.dp,
-                              20.dp,
-                              5.dp
+                              start = 20.dp,
+                              top = 10.dp,
+                              end = 20.dp,
+                              bottom = 5.dp
                           )
                       )
 
                       Text(
-                          "Movie Vault links to authorized and openly licensed sources. It does not host unauthorized movie files.",
+                          text = "Movie Vault links to authorized and openly licensed sources. It does not host unauthorized movie files.",
                           color = Muted,
                           fontSize = 13.sp,
                           modifier = Modifier.padding(
@@ -954,52 +1157,61 @@ jobs:
               movie: Movie,
               onBack: () -> Unit
           ) {
+
               val context = LocalContext.current
 
               val player = remember(movie.video) {
+
                   ExoPlayer.Builder(context)
                       .build()
                       .apply {
+
                           setMediaItem(
                               MediaItem.fromUri(
                                   movie.video!!
                               )
                           )
+
                           prepare()
                           playWhenReady = true
                       }
               }
 
               DisposableEffect(player) {
+
                   onDispose {
                       player.release()
                   }
               }
 
               Column(
-                  Modifier
+                  modifier = Modifier
                       .fillMaxSize()
                       .background(Color.Black)
               ) {
+
                   Row(
-                      Modifier
+                      modifier = Modifier
                           .fillMaxWidth()
                           .padding(8.dp),
+
                       verticalAlignment =
                           Alignment.CenterVertically
                   ) {
+
                       IconButton(
                           onClick = onBack
                       ) {
+
                           Icon(
-                              Icons.Default.ArrowBack,
-                              null,
+                              imageVector = Icons.Default.ArrowBack,
+                              contentDescription = "Back",
                               tint = Color.White
                           )
                       }
 
                       Text(
-                          movie.title,
+                          text = movie.title,
                           color = Color.White,
                           fontWeight = FontWeight.Bold
                       )
@@ -1007,12 +1219,14 @@ jobs:
 
                   AndroidView(
                       factory = { ctx ->
+
                           PlayerView(ctx).apply {
                               this.player = player
                               useController = true
                           }
                       },
-                      Modifier
+
+                      modifier = Modifier
                           .fillMaxWidth()
                           .weight(1f)
                   )
@@ -1020,40 +1234,46 @@ jobs:
           }
 
           @Composable
-          fun Search(
+          fun SearchScreen(
               search: String,
               onSearch: (String) -> Unit,
               onMovie: (Movie) -> Unit,
               onBack: () -> Unit
           ) {
-              val results =
-                  movieList.filter {
-                      it.title.contains(
-                          search,
-                          true
-                      ) ||
-                          it.genre.contains(
-                              search,
-                              true
-                          )
-                  }
+
+              val results = movieList.filter { movie ->
+
+                  movie.title.contains(
+                      other = search,
+                      ignoreCase = true
+                  ) ||
+
+                  movie.genre.contains(
+                      other = search,
+                      ignoreCase = true
+                  )
+              }
 
               Column(
-                  Modifier.fillMaxSize()
+                  modifier = Modifier.fillMaxSize()
               ) {
+
                   Row(
-                      Modifier
+                      modifier = Modifier
                           .fillMaxWidth()
                           .padding(10.dp),
+
                       verticalAlignment =
                           Alignment.CenterVertically
                   ) {
+
                       IconButton(
                           onClick = onBack
                       ) {
+
                           Icon(
-                              Icons.Default.ArrowBack,
-                              null,
+                              imageVector = Icons.Default.ArrowBack,
+                              contentDescription = "Back",
                               tint = Color.White
                           )
                       }
@@ -1061,42 +1281,49 @@ jobs:
                       BasicTextField(
                           value = search,
                           onValueChange = onSearch,
-                          modifier =
-                              Modifier
-                                  .fillMaxWidth()
-                                  .clip(
-                                      RoundedCornerShape(16.dp)
-                                  )
-                                  .background(Card)
-                                  .padding(16.dp),
-                          textStyle =
-                              TextStyle(
-                                  color = Color.White,
-                                  fontSize = 16.sp
-                              ),
-                          decorationBox = { inner ->
+
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clip(
+                                  RoundedCornerShape(16.dp)
+                              )
+                              .background(Card)
+                              .padding(16.dp),
+
+                          textStyle = TextStyle(
+                              color = Color.White,
+                              fontSize = 16.sp
+                          ),
+
+                          decorationBox = { innerTextField ->
+
                               if (search.isEmpty()) {
+
                                   Text(
-                                      "Search movies or genres...",
+                                      text = "Search movies or genres...",
                                       color = Muted
                                   )
                               }
 
-                              inner()
+                              innerTextField()
                           }
                       )
                   }
 
                   LazyColumn(
-                      contentPadding =
-                          PaddingValues(16.dp),
+                      contentPadding = PaddingValues(16.dp),
                       verticalArrangement =
                           Arrangement.spacedBy(12.dp)
                   ) {
-                      items(results) {
-                          SearchResult(it) {
-                              onMovie(it)
-                          }
+
+                      items(results) { movie ->
+
+                          SearchResult(
+                              movie = movie,
+                              onClick = {
+                                  onMovie(movie)
+                              }
+                          )
                       }
                   }
               }
@@ -1107,8 +1334,9 @@ jobs:
               movie: Movie,
               onClick: () -> Unit
           ) {
+
               Row(
-                  Modifier
+                  modifier = Modifier
                       .fillMaxWidth()
                       .clip(
                           RoundedCornerShape(15.dp)
@@ -1119,40 +1347,47 @@ jobs:
                       }
                       .padding(10.dp)
               ) {
+
                   AsyncImage(
-                      movie.poster,
-                      movie.title,
-                      Modifier
-                          .size(75.dp, 105.dp)
+                      model = movie.poster,
+                      contentDescription = movie.title,
+
+                      modifier = Modifier
+                          .size(
+                              width = 75.dp,
+                              height = 105.dp
+                          )
                           .clip(
                               RoundedCornerShape(10.dp)
                           ),
+
                       contentScale = ContentScale.Crop
                   )
 
                   Spacer(
-                      Modifier.width(14.dp)
+                      modifier = Modifier.width(14.dp)
                   )
 
                   Column {
+
                       Text(
-                          movie.title,
+                          text = movie.title,
                           color = Color.White,
                           fontWeight = FontWeight.Bold
                       )
 
                       Text(
-                          "${movie.year} • ${movie.genre}",
+                          text = "${movie.year} • ${movie.genre}",
                           color = Gold,
                           fontSize = 12.sp
                       )
 
                       Spacer(
-                          Modifier.height(5.dp)
+                          modifier = Modifier.height(5.dp)
                       )
 
                       Text(
-                          movie.description,
+                          text = movie.description,
                           color = Muted,
                           maxLines = 3,
                           fontSize = 12.sp
@@ -1167,30 +1402,38 @@ jobs:
               onMovie: (Movie) -> Unit,
               onBack: () -> Unit
           ) {
+
               Column(
-                  Modifier.fillMaxSize()
+                  modifier = Modifier.fillMaxSize()
               ) {
-                  Top(
-                      "My List",
-                      onBack
+
+                  TopBar(
+                      title = "My List",
+                      onBack = onBack
                   )
 
                   if (movies.isEmpty()) {
-                      Empty(
-                          "No movies saved yet.",
-                          Icons.Default.FavoriteBorder
+
+                      EmptyState(
+                          text = "No movies saved yet."
                       )
+
                   } else {
+
                       LazyColumn(
-                          contentPadding =
-                              PaddingValues(16.dp),
+                          contentPadding = PaddingValues(16.dp),
                           verticalArrangement =
                               Arrangement.spacedBy(12.dp)
                       ) {
-                          items(movies) {
-                              SearchResult(it) {
-                                  onMovie(it)
-                              }
+
+                          items(movies) { movie ->
+
+                              SearchResult(
+                                  movie = movie,
+                                  onClick = {
+                                      onMovie(movie)
+                                  }
+                              )
                           }
                       }
                   }
@@ -1201,17 +1444,18 @@ jobs:
           fun Downloads(
               onBack: () -> Unit
           ) {
+
               Column(
-                  Modifier.fillMaxSize()
+                  modifier = Modifier.fillMaxSize()
               ) {
-                  Top(
-                      "Downloads",
-                      onBack
+
+                  TopBar(
+                      title = "Downloads",
+                      onBack = onBack
                   )
 
-                  Empty(
-                      "Downloaded movies are saved in your phone's Downloads folder.",
-                      Icons.Default.Download
+                  EmptyState(
+                      text = "Downloaded movies are saved in your phone's Downloads folder."
                   )
               }
           }
@@ -1220,37 +1464,40 @@ jobs:
           fun More(
               onBack: () -> Unit
           ) {
+
               Column(
-                  Modifier.fillMaxSize()
+                  modifier = Modifier.fillMaxSize()
               ) {
-                  Top(
-                      "More",
-                      onBack
+
+                  TopBar(
+                      title = "More",
+                      onBack = onBack
                   )
 
                   Column(
-                      Modifier
+                      modifier = Modifier
                           .fillMaxWidth()
                           .padding(20.dp)
                   ) {
+
                       Text(
-                          "MOVIE VAULT",
+                          text = "MOVIE VAULT",
                           color = Gold,
                           fontSize = 28.sp,
                           fontWeight = FontWeight.Bold
                       )
 
                       Text(
-                          "Version 10.0",
+                          text = "Version 10.0",
                           color = Muted
                       )
 
                       Spacer(
-                          Modifier.height(20.dp)
+                          modifier = Modifier.height(20.dp)
                       )
 
                       Text(
-                          "A movie discovery app focused on public-domain, Creative Commons and other authorized sources.",
+                          text = "A movie discovery app focused on public-domain, Creative Commons and other authorized sources.",
                           color = Color.LightGray,
                           fontSize = 15.sp
                       )
@@ -1259,29 +1506,33 @@ jobs:
           }
 
           @Composable
-          fun Top(
+          fun TopBar(
               title: String,
               onBack: () -> Unit
           ) {
+
               Row(
-                  Modifier
+                  modifier = Modifier
                       .fillMaxWidth()
                       .padding(10.dp),
+
                   verticalAlignment =
                       Alignment.CenterVertically
               ) {
+
                   IconButton(
                       onClick = onBack
                   ) {
+
                       Icon(
-                          Icons.Default.ArrowBack,
-                          null,
+                          imageVector = Icons.Default.ArrowBack,
+                          contentDescription = "Back",
                           tint = Color.White
                       )
                   }
 
                   Text(
-                      title,
+                      text = title,
                       color = Color.White,
                       fontSize = 25.sp,
                       fontWeight = FontWeight.Bold
@@ -1290,33 +1541,35 @@ jobs:
           }
 
           @Composable
-          fun Empty(
-              text: String,
-              icon: androidx.compose.ui.graphics.vector.ImageVector
+          fun EmptyState(
+              text: String
           ) {
+
               Column(
-                  Modifier
+                  modifier = Modifier
                       .fillMaxSize()
                       .padding(30.dp),
+
                   horizontalAlignment =
                       Alignment.CenterHorizontally,
+
                   verticalArrangement =
                       Arrangement.Center
               ) {
+
                   Icon(
-                      icon,
-                      null,
+                      imageVector = Icons.Default.Download,
+                      contentDescription = null,
                       tint = Gold,
-                      modifier =
-                          Modifier.size(55.dp)
+                      modifier = Modifier.size(55.dp)
                   )
 
                   Spacer(
-                      Modifier.height(15.dp)
+                      modifier = Modifier.height(15.dp)
                   )
 
                   Text(
-                      text,
+                      text = text,
                       color = Muted,
                       fontSize = 15.sp
                   )
@@ -1324,17 +1577,28 @@ jobs:
           }
           EOF
 
+      # ---------------------------------------------------------
+      # BUILD
+      # ---------------------------------------------------------
+
+      - name: Build Movie Vault APK
+        shell: bash
+        run: |
+          set -e
           cd MovieVaultV10
 
           echo "Starting Gradle build..."
-
           gradle assembleDebug --no-daemon
 
-          echo "Build completed successfully."
+      # ---------------------------------------------------------
+      # VERIFY APK
+      # ---------------------------------------------------------
 
       - name: Verify APK
         shell: bash
         run: |
+          set -e
+
           APK="MovieVaultV10/app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
@@ -1345,9 +1609,13 @@ jobs:
           echo "APK successfully created:"
           ls -lh "$APK"
 
-      - name: Upload Volume 10 APK
+      # ---------------------------------------------------------
+      # UPLOAD APK
+      # ---------------------------------------------------------
+
+      - name: Upload Movie Vault APK
         uses: actions/upload-artifact@v4
         with:
-          name: MovieVault-Volume-10-APK
+          name: MovieVault-Volume10-APK
           path: MovieVaultV10/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
